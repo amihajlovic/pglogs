@@ -1,0 +1,28 @@
+# Script to download all RDS logs for a DB instance
+# requires AWS cli and jq.
+ 
+DB=${1}
+ 
+if [ -z ${DB} ]; then
+  echo "Please pass an argument for the database.  E.g.:"
+  echo "  ${0} my_rds_db"
+fi
+ 
+ 
+if [ -z ${SKIP_LOGFILES} ]; then
+  echo "Downloading list of logfiles"
+  aws rds describe-db-log-files --db-instance-identifier ${DB} | \
+    jq ".DescribeDBLogFiles[].LogFileName" -r > logfiles
+fi
+ 
+test -d logs || mkdir logs
+ 
+while IFS='' read -r file; do
+  portion="logs/$(basename ${file})"
+ 
+  if [ ! -f "${portion}" ]; then
+    echo "Downloading ${file}"
+    aws rds download-db-log-file-portion --db-instance-identifier ${DB} --max-items 99999999 --starting-token 0 \
+      --log-file-name ${file} | jq -r ".LogFileData" > ${portion}
+  fi
+done < logfiles
